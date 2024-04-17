@@ -1,3 +1,4 @@
+import time
 from mass_spring_robot_config import robots
 import argparse
 import random
@@ -70,9 +71,13 @@ def n_input_states():
 
 def allocate_fields():
     ti.root.dense(ti.i, max_steps).dense(ti.j, n_objects).place(x, v, v_inc)
-    ti.root.dense(ti.i, n_springs).place(spring_anchor_a, spring_anchor_b,
-                                         spring_length, spring_stiffness,
-                                         spring_actuation)
+    ti.root.dense(ti.i, n_springs).place(
+        spring_anchor_a,
+        spring_anchor_b,
+        spring_length,
+        spring_stiffness,
+        spring_actuation,
+    )
     ti.root.dense(ti.ij, (n_hidden, n_input_states())).place(weights1)
     ti.root.dense(ti.i, n_hidden).place(bias1)
     ti.root.dense(ti.ij, (n_springs, n_hidden)).place(weights2)
@@ -102,22 +107,22 @@ def nn1(t: ti.i32):
     for i in range(n_hidden):
         actuation = 0.0
         for j in ti.static(range(n_sin_waves)):
-            actuation += weights1[i, j] * ti.sin(spring_omega * t * dt +
-                                                 2 * math.pi / n_sin_waves * j)
+            actuation += weights1[i, j] * ti.sin(
+                spring_omega * t * dt + 2 * math.pi / n_sin_waves * j
+            )
         for j in ti.static(range(n_objects)):
             offset = x[t, j] - center[t]
             # use a smaller weight since there are too many of them
             actuation += weights1[i, j * 4 + n_sin_waves] * offset[0] * 0.05
-            actuation += weights1[i,
-                                  j * 4 + n_sin_waves + 1] * offset[1] * 0.05
-            actuation += weights1[i, j * 4 + n_sin_waves + 2] * v[t,
-                                                                  j][0] * 0.05
-            actuation += weights1[i, j * 4 + n_sin_waves + 3] * v[t,
-                                                                  j][1] * 0.05
-        actuation += weights1[i, n_objects * 4 +
-                              n_sin_waves] * (goal[None][0] - center[t][0])
-        actuation += weights1[i, n_objects * 4 + n_sin_waves +
-                              1] * (goal[None][1] - center[t][1])
+            actuation += weights1[i, j * 4 + n_sin_waves + 1] * offset[1] * 0.05
+            actuation += weights1[i, j * 4 + n_sin_waves + 2] * v[t, j][0] * 0.05
+            actuation += weights1[i, j * 4 + n_sin_waves + 3] * v[t, j][1] * 0.05
+        actuation += weights1[i, n_objects * 4 + n_sin_waves] * (
+            goal[None][0] - center[t][0]
+        )
+        actuation += weights1[i, n_objects * 4 + n_sin_waves + 1] * (
+            goal[None][1] - center[t][1]
+        )
         actuation += bias1[i]
         actuation = ti.tanh(actuation)
         hidden[t, i] = actuation
@@ -144,10 +149,8 @@ def apply_spring_force(t: ti.i32):
         dist = pos_a - pos_b
         length = dist.norm() + 1e-4
 
-        target_length = spring_length[i] * (1.0 +
-                                            spring_actuation[i] * act[t, i])
-        impulse = dt * (length -
-                        target_length) * spring_stiffness[i] / length * dist
+        target_length = spring_length[i] * (1.0 + spring_actuation[i] * act[t, i])
+        impulse = dt * (length - target_length) * spring_stiffness[i] / length * dist
 
         ti.atomic_add(v_inc[t + 1, a], -impulse)
         ti.atomic_add(v_inc[t + 1, b], impulse)
@@ -160,8 +163,7 @@ use_toi = False
 def advance_toi(t: ti.i32):
     for i in range(n_objects):
         s = math.exp(-dt * damping)
-        old_v = s * v[t - 1, i] + dt * gravity * ti.Vector([0.0, 1.0
-                                                            ]) + v_inc[t, i]
+        old_v = s * v[t - 1, i] + dt * gravity * ti.Vector([0.0, 1.0]) + v_inc[t, i]
         old_x = x[t - 1, i]
         new_x = old_x + dt * old_v
         toi = 0.0
@@ -179,8 +181,7 @@ def advance_toi(t: ti.i32):
 def advance_no_toi(t: ti.i32):
     for i in range(n_objects):
         s = math.exp(-dt * damping)
-        old_v = s * v[t - 1, i] + dt * gravity * ti.Vector([0.0, 1.0
-                                                            ]) + v_inc[t, i]
+        old_v = s * v[t - 1, i] + dt * gravity * ti.Vector([0.0, 1.0]) + v_inc[t, i]
         old_x = x[t - 1, i]
         new_v = old_v
         depth = old_x[1] - ground_height
@@ -211,7 +212,7 @@ def forward(output=None, visualize=True):
     interval = vis_interval
     if output:
         interval = output_vis_interval
-        os.makedirs('mass_spring/{}/'.format(output), exist_ok=True)
+        os.makedirs("mass_spring/{}/".format(output), exist_ok=True)
 
     total_steps = steps if not output else steps * 2
 
@@ -226,10 +227,9 @@ def forward(output=None, visualize=True):
             advance_no_toi(t)
 
         if (t + 1) % interval == 0 and visualize:
-            gui.line(begin=(0, ground_height),
-                     end=(1, ground_height),
-                     color=0x0,
-                     radius=3)
+            gui.line(
+                begin=(0, ground_height), end=(1, ground_height), color=0x0, radius=3
+            )
 
             def circle(x, y, color):
                 gui.circle((x, y), ti.rgb_to_hex(color), 7)
@@ -247,10 +247,12 @@ def forward(output=None, visualize=True):
                 else:
                     r = 4
                     c = ti.rgb_to_hex((0.5 + a, 0.5 - abs(a), 0.5 - a))
-                gui.line(begin=get_pt(x[t, spring_anchor_a[i]]),
-                         end=get_pt(x[t, spring_anchor_b[i]]),
-                         radius=r,
-                         color=c)
+                gui.line(
+                    begin=get_pt(x[t, spring_anchor_a[i]]),
+                    end=get_pt(x[t, spring_anchor_b[i]]),
+                    radius=r,
+                    color=c,
+                )
 
             for i in range(n_objects):
                 color = (0.4, 0.6, 0.6)
@@ -260,7 +262,7 @@ def forward(output=None, visualize=True):
             # circle(goal[None][0], goal[None][1], (0.6, 0.2, 0.2))
 
             if output:
-                gui.show('mass_spring/{}/{:04d}.png'.format(output, t))
+                gui.show("mass_spring/{}/{:04d}.png".format(output, t))
             else:
                 gui.show()
 
@@ -285,7 +287,7 @@ def setup_robot(objects, springs):
     n_springs = len(springs)
     allocate_fields()
 
-    print('n_objects=', n_objects, '   n_springs=', n_springs)
+    print("n_objects=", n_objects, "   n_springs=", n_springs)
 
     for i in range(n_objects):
         x[0, i] = objects[i]
@@ -304,14 +306,16 @@ def optimize(toi, visualize):
     use_toi = toi
     for i in range(n_hidden):
         for j in range(n_input_states()):
-            weights1[i, j] = np.random.randn() * math.sqrt(
-                2 / (n_hidden + n_input_states())) * 2
+            weights1[i, j] = (
+                np.random.randn() * math.sqrt(2 / (n_hidden + n_input_states())) * 2
+            )
 
     for i in range(n_springs):
         for j in range(n_hidden):
             # TODO: n_springs should be n_actuators
-            weights2[i, j] = np.random.randn() * math.sqrt(
-                2 / (n_hidden + n_springs)) * 3
+            weights2[i, j] = (
+                np.random.randn() * math.sqrt(2 / (n_hidden + n_springs)) * 3
+            )
 
     losses = []
     # forward('initial{}'.format(robot_id), visualize=visualize)
@@ -321,20 +325,18 @@ def optimize(toi, visualize):
         with ti.ad.Tape(loss):
             forward(visualize=visualize)
 
-        print('Iter=', iter, 'Loss=', loss[None])
+        print("Iter=", iter, "Loss=", loss[None])
 
         total_norm_sqr = 0
         for i in range(n_hidden):
             for j in range(n_input_states()):
-                total_norm_sqr += weights1.grad[i, j]**2
-            total_norm_sqr += bias1.grad[i]**2
+                total_norm_sqr += weights1.grad[i, j] ** 2
+            total_norm_sqr += bias1.grad[i] ** 2
 
         for i in range(n_springs):
             for j in range(n_hidden):
-                total_norm_sqr += weights2.grad[i, j]**2
-            total_norm_sqr += bias2.grad[i]**2
-
-        print(total_norm_sqr)
+                total_norm_sqr += weights2.grad[i, j] ** 2
+            total_norm_sqr += bias2.grad[i] ** 2
 
         # scale = learning_rate * min(1.0, gradient_clip / total_norm_sqr ** 0.5)
         gradient_clip = 0.2
@@ -352,34 +354,40 @@ def optimize(toi, visualize):
 
     return losses
 
+
 parser = argparse.ArgumentParser()
-parser.add_argument('robot_id', type=int, help='[robot_id=0, 1, 2, ...]')
-parser.add_argument('task', type=str, help='train/plot')
-parser.add_argument('--iters', type=int, default=100)
+parser.add_argument("robot_id", type=int, help="[robot_id=0, 1, 2, ...]")
+parser.add_argument("task", type=str, help="train/plot")
+parser.add_argument("--iters", type=int, default=100)
 options = parser.parse_args()
+
 
 def main():
 
     setup_robot(*robots[options.robot_id]())
 
-    if options.task == 'plot':
+    if options.task == "plot":
         ret = {}
         for toi in [False, True]:
             ret[toi] = []
             for i in range(5):
                 losses = optimize(toi=toi, visualize=False)
                 # losses = gaussian_filter(losses, sigma=3)
-                plt.plot(losses, 'g' if toi else 'r')
+                plt.plot(losses, "g" if toi else "r")
                 ret[toi].append(losses)
 
         import pickle
-        pickle.dump(ret, open('losses.pkl', 'wb'))
+
+        pickle.dump(ret, open("losses.pkl", "wb"))
         print("Losses saved to losses.pkl")
     else:
-        optimize(toi=True, visualize=True)
+        start = time.time()
+        optimize(toi=True, visualize=False)
+        end = time.time()
+        print("Optimization took {} seconds".format(end - start))
         clear()
-        forward('final{}'.format(options.robot_id))
+        forward("final{}".format(options.robot_id))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

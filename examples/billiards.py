@@ -1,3 +1,4 @@
+import time
 import taichi as ti
 import sys
 import math
@@ -62,7 +63,8 @@ def collide_pair(t, i, j):
             if projected_v < 0:
                 imp = -(1 + elasticity) * 0.5 * projected_v * dir
                 toi = (dist_norm - 2 * radius) / min(
-                    -1e-3, projected_v)  # Time of impact
+                    -1e-3, projected_v
+                )  # Time of impact
                 x_inc_contrib = min(toi - dt, 0) * imp
     x_inc[t + 1, i] += x_inc_contrib
     impulse[t + 1, i] += imp
@@ -87,8 +89,9 @@ def advance(t: ti.i32):
 
 @ti.kernel
 def compute_loss(t: ti.i32):
-    loss[None] = (x[t, target_ball][0] - goal[0])**2 + (x[t, target_ball][1] -
-                                                        goal[1])**2
+    loss[None] = (x[t, target_ball][0] - goal[0]) ** 2 + (
+        x[t, target_ball][1] - goal[1]
+    ) ** 2
 
 
 @ti.kernel
@@ -106,14 +109,15 @@ def forward(visualize=False, output=None):
     interval = vis_interval
     if output:
         interval = output_vis_interval
-        os.makedirs('billiards/{}/'.format(output), exist_ok=True)
+        os.makedirs("billiards/{}/".format(output), exist_ok=True)
 
     count = 0
     for i in range(billiard_layers):
         for j in range(i + 1):
             count += 1
             x[0, count] = [
-                i * 2 * radius + 0.5, j * 2 * radius + 0.5 - i * radius * 0.7
+                i * 2 * radius + 0.5,
+                j * 2 * radius + 0.5 - i * radius * 0.7,
             ]
 
     pixel_radius = int(radius * 1024) + 1
@@ -130,14 +134,14 @@ def forward(visualize=False, output=None):
                 if i == 0:
                     color = 0xCCCCCC
                 elif i == n_balls - 1:
-                    color = 0x3344cc
+                    color = 0x3344CC
                 else:
                     color = 0xF20530
 
                 gui.circle((x[t, i][0], x[t, i][1]), color, pixel_radius)
 
             if output:
-                gui.show('billiards/{}/{:04d}.png'.format(output, t))
+                gui.show("billiards/{}/{:04d}.png".format(output, t))
             else:
                 gui.show()
 
@@ -163,25 +167,25 @@ def optimize():
 
         with ti.ad.Tape(loss):
             if iter % 20 == 19:
-                output = 'iter{:04d}'.format(iter)
+                output = "iter{:04d}".format(iter)
             else:
                 output = None
-            forward(visualize=True, output=output)
+            forward(visualize=False, output=output)
 
-        print('Iter=', iter, 'Loss=', loss[None])
+        print("Iter=", iter, "Loss=", loss[None])
         for d in range(2):
             init_x[None][d] -= learning_rate * init_x.grad[None][d]
             init_v[None][d] -= learning_rate * init_v.grad[None][d]
 
     clear()
-    forward(visualize=True, output='final')
+    forward(visualize=False, output="final")
 
 
 def scan(zoom):
     N = 1000
     angles = []
     losses = []
-    forward(visualize=True, output='initial')
+    forward(visualize=True, output="initial")
     for i in range(N):
         alpha = ((i + 0.5) / N - 0.5) * math.pi * zoom
         init_x[None] = [0.1, 0.5]
@@ -198,15 +202,19 @@ def scan(zoom):
     plt.plot(angles, losses)
     fig = plt.gcf()
     fig.set_size_inches(5, 3)
-    plt.title('Billiard Scene Objective')
-    plt.ylabel('Objective')
-    plt.xlabel('Angle of velocity')
+    plt.title("Billiard Scene Objective")
+    plt.ylabel("Objective")
+    plt.xlabel("Angle of velocity")
     plt.tight_layout()
     plt.show()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     if len(sys.argv) > 1:
         scan(float(sys.argv[1]))
     else:
+        # record timing info
+        start_time = time.time()
         optimize()
+        end_time = time.time()
+        print("Optimization took {} seconds".format(end_time - start_time))
